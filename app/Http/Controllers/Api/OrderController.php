@@ -225,4 +225,94 @@ class OrderController extends Controller
     {
         return "https://bakong.nbc.org.kh/pay?merchant=topup_store&amount={$order->amount}&currency=USD&order_id={$order->order_number}";
     }
+
+    /**
+     * ឆែកមើលស្ថានភាពប្រតិបត្តិការផ្ទាល់ជាមួយ ABA PayWay API
+     * GET /api/orders/{orderNumber}/check-aba
+     */
+    public function checkWithAba($orderNumber)
+    {
+        $order = Order::where('order_number', $orderNumber)->first();
+
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        $merchantId = config('services.aba.merchant_id');
+        $apiKey     = config('services.aba.api_key');
+        $reqTime    = date('YmdHis');
+
+        // ១. រូបមន្ត Hash ផ្លូវការរបស់ ABA PayWay សម្រាប់ Check Transaction:
+        // Hash String = req_time + merchant_id + tran_id
+        $hashStr = $reqTime . $merchantId . $orderNumber;
+        $hash    = base64_encode(hash_hmac('sha512', $hashStr, $apiKey, true));
+
+        // ២. ហៅទៅ Endpoint Check Transaction របស់ ABA Sandbox
+        try {
+            $response = Http::asMultipart()->timeout(15)->post(
+                'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/check-transaction',
+                [
+                    [
+                        'name'     => 'req_time',
+                        'contents' => $reqTime,
+                    ],
+                    [
+                        'name'     => 'merchant_id',
+                        'contents' => $merchantId,
+                    ],
+                    [
+                        'name'     => 'tran_id',
+                        'contents' => $orderNumber,
+                    ],
+                    [
+                        'name'     => 'hash',
+                        'contents' => $hash,
+                    ],
+                ]
+            );
+
+            $abaData = $response->json();
+
+            // កត់ត្រាទុកក្នុង Log ដើម្បីស្រួលពិនិត្យ
+            Log::info('ABA Check Transaction Response:', [
+                'order_number' => $orderNumber,
+                'response'     => $abaData,
+            ]);
+
+            // ៣. ពិនិត្យមើលលទ្ធផលពី ABA Sandbox
+            // ប្រសិនបើ ABA ឆ្លើយតបមក statusCode: 0 ឬ status: 0 (ជោគជ័យ)
+            $status = $abaData['status'] ?? null;
+
+            if ($status === 0 || $status === '0') {
+                if ($order->status !== 'COMPLETED') {
+                    // Update Order ទៅជា COMPLETED
+                    $order->update([
+                        'status'          => 'COMPLETED',
+                        'provider_ref_id' => $abaData['payment_details']['tran_id'] ?? 'ABA_VERIFIED',
+                    ]);
+                }
+
+                return response()->json([
+                    'success'       => true,
+                    'order_status'  => 'COMPLETED',
+                    'message'       => 'ការទូទាត់ប្រាក់ជោគជ័យ!',
+                    'aba_raw'       => $abaData,
+                ]);
+            }
+
+            return response()->json([
+                'success'      => false,
+                'order_status' => $order->status,
+                'message'      => $abaData['description'] ?? 'មិនទាន់ទូទាត់ប្រាក់នៅឡើយទេ (Pending)',
+                'aba_raw'      => $abaData,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Check ABA Exception: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Connection to ABA failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
