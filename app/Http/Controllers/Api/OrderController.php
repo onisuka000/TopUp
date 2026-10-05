@@ -2,317 +2,50 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Contracts\OrderServiceContract;
 use App\Http\Controllers\Controller;
-use App\Models\Product;
-use App\Models\Order;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use App\Http\Requests\CreateOrderRequest;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        protected OrderServiceContract $orderService
+    ) {}
+
     /**
      * Endpoint បង្កើត Order និងទាញយក QR Code សម្រាប់ទូទាត់ប្រាក់
      * POST /api/orders/create
      */
-    public function create(Request $request)
+    public function create(CreateOrderRequest $request)
     {
-        // ១. ផ្ទៀងផ្ទាត់ទិន្នន័យពី Frontend
-        $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'user_id'    => 'required|string',
-            'zone_id'    => 'nullable|string',
-        ]);
+        $result = $this->orderService->create($request->validated());
 
-        $product = Product::with('game')->findOrFail($validated['product_id']);
-
-        // ២. បង្កើត Order Number ពិសេស (ឧ. ORD-20261005-XXXX)
-        $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-
-        // ៣. បង្កើត Record ក្នុង Database (Status: PENDING)
-        $order = Order::create([
-            'order_number'    => $orderNumber,
-            'product_id'      => $product->id,
-            'game_user_id'    => $validated['user_id'],
-            'zone_id'         => $validated['zone_id'],
-            'amount'          => $product->selling_price,
-            'payment_method'  => 'KHQR',
-            'status'          => 'PENDING',
-        ]);
-
-        // ៤. ព័ត៌មាន ABA PayWay Config
-        $merchantId  = config('services.aba.merchant_id');
-        $apiKey      = config('services.aba.api_key');
-        $apiUrl      = config('services.aba.url');
-        $reqTime     = date('YmdHis');
-        $tranId      = $order->order_number;
-        $amount      = number_format($order->amount, 2, '.', '');
-        $firstName   = 'Gamer';
-        $lastName    = 'Customer';
-        $phone       = '012345678';
-        $email       = 'customer@gmail.com';
-        $paymentOpt  = 'abapay_khqr';
-        $type        = 'purchase';
-        $shipping    = ''; // ទទេសម្រាប់ digital goods
-        $returnUrl   = base64_encode('https://yourdomain.com');
-        $pushbackUrl = 'https://fleshy-emit-pellet.ngrok-free.dev/api/webhook/aba';
-
-        // Items ត្រូវ Encode ជា Base64 JSON
-        $items = base64_encode(json_encode([
-            [
-                'name'     => $product->name,
-                'quantity' => 1,
-                'price'    => (float) $amount,
-            ]
-        ]));
-
-        // ១. រូបមន្ត Hash ផ្លូវការ (គ្មាន push_back_url ក្នុង string ទេ)
-        $hashStr = $reqTime
-            . $merchantId
-            . $tranId
-            . $amount
-            . $items
-            . $shipping
-            . $firstName
-            . $lastName
-            . $email
-            . $phone
-            . $type
-            . $paymentOpt
-            . $returnUrl;
-
-        $hash = base64_encode(hash_hmac('sha512', $hashStr, $apiKey, true));
-
-        // ២. បាញ់ Request ជា Multipart Form-Data (តម្រូវការចាំបាច់របស់ ABA PayWay)
-        $response = Http::asMultipart()->post($apiUrl, [
-            [
-                'name'     => 'req_time',
-                'contents' => $reqTime,
-            ],
-            [
-                'name'     => 'merchant_id',
-                'contents' => $merchantId,
-            ],
-            [
-                'name'     => 'tran_id',
-                'contents' => $tranId,
-            ],
-            [
-                'name'     => 'amount',
-                'contents' => $amount,
-            ],
-            [
-                'name'     => 'items',
-                'contents' => $items,
-            ],
-            [
-                'name'     => 'firstname',
-                'contents' => $firstName,
-            ],
-            [
-                'name'     => 'lastname',
-                'contents' => $lastName,
-            ],
-            [
-                'name'     => 'email',
-                'contents' => $email,
-            ],
-            [
-                'name'     => 'phone',
-                'contents' => $phone,
-            ],
-            [
-                'name'     => 'type',
-                'contents' => $type,
-            ],
-            [
-                'name'     => 'payment_option',
-                'contents' => $paymentOpt,
-            ],
-            [
-                'name'     => 'return_url',
-                'contents' => $returnUrl,
-            ],
-            [
-                'name'     => 'push_back_url',
-                'contents' => $pushbackUrl,
-            ],
-            [
-                'name'     => 'hash',
-                'contents' => $hash,
-            ],
-        ]);
-
-        Log::info('ABA Sandbox Response:', [
-            'sent_hash_string' => $hashStr,
-            'status_code'      => $response->status(),
-            'body'             => $response->json() ?? $response->body()
-        ]);
-
-        // ៥. ហៅទៅ ABA Sandbox API (បើសិនជាមាន Config ត្រឹមត្រូវ)
-        if ($merchantId && $apiKey && $apiUrl) {
-            try {
-                // រូបមន្ត Hash របស់ ABA PayWay
-                $hashStr = $reqTime . $merchantId . $tranId . $amount . '' . '' . 'purchase' . 'USD' . $pushbackUrl;
-                $hash = base64_encode(hash_hmac('sha512', $hashStr, $apiKey, true));
-
-                $response = Http::asForm()->timeout(10)->post($apiUrl, [
-                    'req_time'       => $reqTime,
-                    'merchant_id'    => $merchantId,
-                    'tran_id'        => $tranId,
-                    'amount'         => $amount,
-                    'payment_option' => 'abapay_khqr',
-                    'currency'       => 'USD',
-                    'hash'           => $hash,
-                    'return_url'     => base64_encode('https://yourdomain.com'),
-                    'push_back_url'  => $pushbackUrl,
-                ]);
-
-                $data = $response->json();
-                $qrImage  = $data['qrImage'] ?? null;
-                $qrString = $data['qrString'] ?? null;
-            } catch (\Exception $e) {
-                Log::error('ABA API Error: ' . $e->getMessage());
-            }
-        }
-
-        // ៦. បើ ABA មិនទាន់ឆ្លើយតប ឬស្ថិតក្នុង Local Mock Test: Generate Local QR Code
-        if (!$qrImage) {
-            $qrPayload = $qrString ?: $this->generateKhqrPayload($order);
-            $qrCodeSvg = QrCode::format('svg')
-                ->size(250)
-                ->errorCorrection('H')
-                ->generate($qrPayload);
-
-            $qrImage = 'data:image/svg+xml;base64,' . base64_encode($qrCodeSvg);
-            $qrString = $qrPayload;
-        }
-
-        // ៧. ឆ្លើយតបទៅកាន់ Vue SPA Frontend
-        return response()->json([
-            'success'      => true,
-            'order_number' => $order->order_number,
-            'amount'       => $amount,
-            'qr_image'     => $qrImage,
-            'qr_string'    => $qrString,
-        ]);
+        return response()->json($result);
     }
 
     /**
      * Endpoint ឆែកមើលស្ថានភាពបង់ប្រាក់ (Polling ពី Frontend)
      * GET /api/orders/{orderNumber}/status
      */
-    public function getStatus($orderNumber)
+    public function getStatus(string $orderNumber)
     {
-        $order = Order::where('order_number', $orderNumber)->first();
+        $status = $this->orderService->getStatus($orderNumber);
 
-        if (!$order) {
+        if (!$status) {
             return response()->json(['message' => 'Order not found'], 404);
         }
 
-        return response()->json([
-            'order_number' => $order->order_number,
-            'status'       => $order->status, // PENDING, PAID, PROCESSING, COMPLETED, FAILED
-        ]);
-    }
-
-    /**
-     * ជំនួយការបង្កើត Dummy KHQR String សម្រាប់ Test ពេលគ្មាន API
-     */
-    private function generateKhqrPayload(Order $order): string
-    {
-        return "https://bakong.nbc.org.kh/pay?merchant=topup_store&amount={$order->amount}&currency=USD&order_id={$order->order_number}";
+        return response()->json($status);
     }
 
     /**
      * ឆែកមើលស្ថានភាពប្រតិបត្តិការផ្ទាល់ជាមួយ ABA PayWay API
      * GET /api/orders/{orderNumber}/check-aba
      */
-    public function checkWithAba($orderNumber)
+    public function checkWithAba(string $orderNumber)
     {
-        $order = Order::where('order_number', $orderNumber)->first();
+        $result = $this->orderService->checkWithAba($orderNumber);
 
-        if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
-        }
-
-        $merchantId = config('services.aba.merchant_id');
-        $apiKey     = config('services.aba.api_key');
-        $reqTime    = date('YmdHis');
-
-        // ១. រូបមន្ត Hash ផ្លូវការរបស់ ABA PayWay សម្រាប់ Check Transaction:
-        // Hash String = req_time + merchant_id + tran_id
-        $hashStr = $reqTime . $merchantId . $orderNumber;
-        $hash    = base64_encode(hash_hmac('sha512', $hashStr, $apiKey, true));
-
-        // ២. ហៅទៅ Endpoint Check Transaction របស់ ABA Sandbox
-        try {
-            $response = Http::asMultipart()->timeout(15)->post(
-                'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/check-transaction',
-                [
-                    [
-                        'name'     => 'req_time',
-                        'contents' => $reqTime,
-                    ],
-                    [
-                        'name'     => 'merchant_id',
-                        'contents' => $merchantId,
-                    ],
-                    [
-                        'name'     => 'tran_id',
-                        'contents' => $orderNumber,
-                    ],
-                    [
-                        'name'     => 'hash',
-                        'contents' => $hash,
-                    ],
-                ]
-            );
-
-            $abaData = $response->json();
-
-            // កត់ត្រាទុកក្នុង Log ដើម្បីស្រួលពិនិត្យ
-            Log::info('ABA Check Transaction Response:', [
-                'order_number' => $orderNumber,
-                'response'     => $abaData,
-            ]);
-
-            // ៣. ពិនិត្យមើលលទ្ធផលពី ABA Sandbox
-            // ប្រសិនបើ ABA ឆ្លើយតបមក statusCode: 0 ឬ status: 0 (ជោគជ័យ)
-            $status = $abaData['status'] ?? null;
-
-            if ($status === 0 || $status === '0') {
-                if ($order->status !== 'COMPLETED') {
-                    // Update Order ទៅជា COMPLETED
-                    $order->update([
-                        'status'          => 'COMPLETED',
-                        'provider_ref_id' => $abaData['payment_details']['tran_id'] ?? 'ABA_VERIFIED',
-                    ]);
-                }
-
-                return response()->json([
-                    'success'       => true,
-                    'order_status'  => 'COMPLETED',
-                    'message'       => 'ការទូទាត់ប្រាក់ជោគជ័យ!',
-                    'aba_raw'       => $abaData,
-                ]);
-            }
-
-            return response()->json([
-                'success'      => false,
-                'order_status' => $order->status,
-                'message'      => $abaData['description'] ?? 'មិនទាន់ទូទាត់ប្រាក់នៅឡើយទេ (Pending)',
-                'aba_raw'      => $abaData,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Check ABA Exception: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Connection to ABA failed: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json($result['response'], $result['status_code']);
     }
 }
