@@ -66,6 +66,7 @@ class UserController extends Controller
                 'super_senior' => User::whereIn('type', ['super_senior', 'super senior'])->count(),
                 'senior' => User::where('type', 'senior')->count(),
                 'junior' => User::where('type', 'junior')->count(),
+                'member' => User::where('type', 'member')->count(),
             ],
         ]);
     }
@@ -85,7 +86,7 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'login_name' => ['required', 'string', 'max:255', 'unique:users,login_name'],
             'password' => ['required', 'string', 'min:6'],
-            'type' => ['required', 'string', 'in:root,super_senior,senior,junior'],
+            'type' => ['required', 'string', 'in:root,super_senior,senior,junior,member'],
             'status' => ['boolean'],
             'remark' => ['nullable', 'string', 'max:500'],
         ]);
@@ -121,7 +122,7 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:255', 'unique:users,username,' . $user->id],
             'login_name' => ['required', 'string', 'max:255', 'unique:users,login_name,' . $user->id],
             'password' => ['nullable', 'string', 'min:6'],
-            'type' => ['required', 'string', 'in:root,super_senior,senior,junior'],
+            'type' => ['required', 'string', 'in:root,super_senior,senior,junior,member'],
             'status' => ['boolean'],
             'remark' => ['nullable', 'string', 'max:500'],
         ]);

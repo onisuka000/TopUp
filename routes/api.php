@@ -8,8 +8,13 @@
 // })->middleware('auth:sanctum');
 
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PlayerCheckController;
 use App\Http\Controllers\Api\WebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Player ID / IGN Verification Endpoint
+Route::post('/check-id', [PlayerCheckController::class, 'check']);
+Route::post('/check-player', [PlayerCheckController::class, 'check']);
 
 // Endpoint បង្កើត Order និងទាញយក KHQR Code
 Route::post('/orders/create', [OrderController::class, 'create']);

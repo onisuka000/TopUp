@@ -34,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
+        // Force HTTPS URLs in production
+        if ($this->app->environment('production')) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         // Root users can access all (don't check permission)
         Gate::before(function (User $user, string $ability) {
             if ($user->isRoot()) {

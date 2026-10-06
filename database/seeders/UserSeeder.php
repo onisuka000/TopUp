@@ -98,5 +98,18 @@ class UserSeeder extends Seeder
         if ($juniorRole) {
             $banned->assignRole($juniorRole);
         }
+
+        // 6. Member User (Storefront customer to top up diamonds)
+        User::updateOrCreate(
+            ['login_name' => 'member'],
+            [
+                'username'           => 'Gamer Member',
+                'password'           => Hash::make('password'),
+                'encrypted_password' => Crypt::encryptString('password'),
+                'type'               => 'member',
+                'status'             => true,
+                'remark'             => 'Regular Storefront Customer',
+            ]
+        );
     }
 }

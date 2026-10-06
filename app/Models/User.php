@@ -42,7 +42,8 @@ class User extends Authenticatable
      */
     public function isRoot(): bool
     {
-        return $this->type === 'root' || $this->hasRole('root');
+        $type = strtolower(trim((string) $this->type));
+        return $type === 'root' || $this->hasRole('root') || $this->hasRole('Root');
     }
 
     /**
@@ -50,7 +51,8 @@ class User extends Authenticatable
      */
     public function isSuperSenior(): bool
     {
-        return $this->type === 'super_senior' || $this->type === 'super senior';
+        $type = strtolower(trim((string) $this->type));
+        return in_array($type, ['super_senior', 'super senior'], true);
     }
 
     /**
@@ -58,7 +60,8 @@ class User extends Authenticatable
      */
     public function isSenior(): bool
     {
-        return $this->type === 'senior';
+        $type = strtolower(trim((string) $this->type));
+        return $type === 'senior';
     }
 
     /**
@@ -66,7 +69,30 @@ class User extends Authenticatable
      */
     public function isJunior(): bool
     {
-        return $this->type === 'junior';
+        $type = strtolower(trim((string) $this->type));
+        return $type === 'junior';
+    }
+
+    /**
+     * Check if user is a Member customer.
+     */
+    public function isMember(): bool
+    {
+        $type = strtolower(trim((string) $this->type));
+        return $type === 'member';
+    }
+
+    /**
+     * Check if user is Admin / Management staff.
+     */
+    public function isAdminStaff(): bool
+    {
+        if ($this->isRoot()) {
+            return true;
+        }
+
+        $type = strtolower(trim((string) $this->type));
+        return in_array($type, ['root', 'super_senior', 'super senior', 'senior', 'junior'], true);
     }
 
     /**

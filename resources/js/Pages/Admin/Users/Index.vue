@@ -59,6 +59,9 @@ const getRoleBadgeClass = (type) => {
     if (t === 'senior') {
         return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20';
     }
+    if (t === 'member') {
+        return 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/20';
+    }
     return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20';
 };
 
@@ -67,6 +70,7 @@ const getRoleLabel = (type) => {
     if (t === 'root') return '👑 ROOT ADMIN';
     if (t === 'super_senior' || t === 'super senior') return '⭐ SUPER SENIOR';
     if (t === 'senior') return '🛡️ SENIOR STAFF';
+    if (t === 'member') return '🎮 MEMBER (STOREFRONT)';
     return '👁️ JUNIOR (VIEW ONLY)';
 };
 
@@ -177,35 +181,42 @@ const executeDelete = () => {
             </button>
         </div>
 
-        <!-- 4 Role / Status Summary Badges -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="bg-slate-900/80 border border-rose-500/20 rounded-xl p-3.5 flex items-center justify-between">
+        <!-- 5 Role / Status Summary Badges -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="bg-slate-900/80 border border-rose-500/20 rounded-xl p-3 flex items-center justify-between">
                 <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-rose-400 block">Root Administrators</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-rose-400 block">Root Admin</span>
                     <span class="text-xl font-black text-white">{{ stats.root }}</span>
                 </div>
                 <span class="text-xl">👑</span>
             </div>
-            <div class="bg-slate-900/80 border border-amber-500/20 rounded-xl p-3.5 flex items-center justify-between">
+            <div class="bg-slate-900/80 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between">
                 <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Super Senior</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-amber-400 block">Super Senior</span>
                     <span class="text-xl font-black text-white">{{ stats.super_senior }}</span>
                 </div>
                 <span class="text-xl">⭐</span>
             </div>
-            <div class="bg-slate-900/80 border border-cyan-500/20 rounded-xl p-3.5 flex items-center justify-between">
+            <div class="bg-slate-900/80 border border-cyan-500/20 rounded-xl p-3 flex items-center justify-between">
                 <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block">Senior Staff</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-cyan-400 block">Senior Staff</span>
                     <span class="text-xl font-black text-white">{{ stats.senior }}</span>
                 </div>
                 <span class="text-xl">🛡️</span>
             </div>
-            <div class="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-3.5 flex items-center justify-between">
+            <div class="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-3 flex items-center justify-between">
                 <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Junior (View-Only)</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-emerald-400 block">Junior Staff</span>
                     <span class="text-xl font-black text-white">{{ stats.junior }}</span>
                 </div>
                 <span class="text-xl">👁️</span>
+            </div>
+            <div class="bg-slate-900/80 border border-purple-500/20 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-purple-400 block">Members (Store)</span>
+                    <span class="text-xl font-black text-white">{{ stats.member || 0 }}</span>
+                </div>
+                <span class="text-xl">🎮</span>
             </div>
         </div>
 
@@ -223,6 +234,7 @@ const executeDelete = () => {
                     <option value="super_senior">⭐ Super Senior</option>
                     <option value="senior">🛡️ Senior</option>
                     <option value="junior">👁️ Junior (View Only)</option>
+                    <option value="member">🎮 Member (Storefront Topup)</option>
                 </select>
             </div>
 
@@ -515,6 +527,7 @@ const executeDelete = () => {
                             <option value="senior">🛡️ Senior Staff (View & Edit)</option>
                             <option value="super_senior">⭐ Super Senior (Full CRUD)</option>
                             <option value="root">👑 Root Administrator (Unrestricted Access)</option>
+                            <option value="member">🎮 Member (Storefront Diamond Topup)</option>
                         </select>
                         <p v-if="form.errors.type" class="text-[11px] text-rose-400 mt-1 font-medium">{{ form.errors.type }}</p>
                     </div>
