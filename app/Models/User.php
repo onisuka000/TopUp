@@ -2,28 +2,105 @@
 
 namespace App\Models;
 
+use App\Traits\HasRolesAndPermissions;
 use Database\Factories\UserFactory;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Crypt;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements FilamentUser
+#[Fillable([
+    'username',
+    'login_name',
+    'password',
+    'encrypted_password',
+    'type',
+    'status',
+    'remark',
+])]
+#[Hidden([
+    'password',
+    'encrypted_password',
+])]
+class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRolesAndPermissions;
 
     /**
-     * Determine whether the user can access the Filament admin panel.
+     * Virtual name attribute accessor for fallback compatibility.
      */
-    public function canAccessPanel(Panel $panel): bool
+    public function getNameAttribute(): string
     {
-        return true;
+        return $this->username ?: $this->login_name;
+    }
+
+    /**
+     * Check if user is Root (bypasses all checks).
+     */
+    public function isRoot(): bool
+    {
+        return $this->type === 'root' || $this->hasRole('root');
+    }
+
+    /**
+     * Check if user is Super Senior.
+     */
+    public function isSuperSenior(): bool
+    {
+        return $this->type === 'super_senior' || $this->type === 'super senior';
+    }
+
+    /**
+     * Check if user is Senior.
+     */
+    public function isSenior(): bool
+    {
+        return $this->type === 'senior';
+    }
+
+    /**
+     * Check if user is Junior (view only).
+     */
+    public function isJunior(): bool
+    {
+        return $this->type === 'junior';
+    }
+
+    /**
+     * Prevent Laravel from querying non-existent remember_token column.
+     */
+    public function getRememberTokenName(): string
+    {
+        return '';
+    }
+
+    public function getRememberToken(): ?string
+    {
+        return null;
+    }
+
+    public function setRememberToken($value): void
+    {
+        // No-op: remember_token column removed
+    }
+
+    /**
+     * Get the decrypted password if available.
+     */
+    public function getDecryptedPasswordAttribute(): ?string
+    {
+        if (!$this->encrypted_password) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($this->encrypted_password);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     /**
@@ -34,8 +111,8 @@ class User extends Authenticatable implements FilamentUser
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'status'   => 'boolean',
         ];
     }
 }

@@ -14,7 +14,7 @@ defineProps({
 const showPassword = ref(false);
 
 const form = useForm({
-    name: '',
+    login_name: '',
     password: '',
     remember: false,
 });
@@ -65,10 +65,10 @@ const submit = () => {
                 </div>
 
                 <form @submit.prevent="submit" class="space-y-5">
-                    <!-- Admin Username / Name -->
+                    <!-- Admin Username / Login Name -->
                     <div>
-                        <label for="name" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                            Admin Username
+                        <label for="login_name" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                            Username or Login Name
                         </label>
                         <div class="relative">
                             <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -77,22 +77,22 @@ const submit = () => {
                                 </svg>
                             </div>
                             <input
-                                id="name"
+                                id="login_name"
                                 type="text"
-                                v-model="form.name"
+                                v-model="form.login_name"
                                 required
                                 autofocus
                                 autocomplete="username"
-                                placeholder="Enter admin username"
+                                placeholder="Enter username or login_name"
                                 class="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-4 py-3 pl-11 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition placeholder-slate-500"
-                                :class="{ 'border-rose-500 focus:border-rose-500 focus:ring-rose-500': form.errors.name }"
+                                :class="{ 'border-rose-500 focus:border-rose-500 focus:ring-rose-500': form.errors.login_name }"
                             />
                         </div>
-                        <p v-if="form.errors.name" class="mt-2 text-xs text-rose-400 flex items-center gap-1 font-medium">
+                        <p v-if="form.errors.login_name" class="mt-2 text-xs text-rose-400 flex items-center gap-1 font-medium">
                             <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span>{{ form.errors.name }}</span>
+                            <span>{{ form.errors.login_name }}</span>
                         </p>
                     </div>
 
