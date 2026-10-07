@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Currency;
 use App\Models\Game;
 use App\Models\Product;
+use App\Services\TokovoucherService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,6 +14,10 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        protected TokovoucherService $tokovoucherService
+    ) {}
+
     /**
      * Display a listing of products.
      */
@@ -50,17 +56,22 @@ class ProductController extends Controller
         $products = $query->paginate(15)->withQueryString();
         $games = Game::select('id', 'name')->orderBy('name')->get();
 
+        $idrRate = Currency::getRate('IDR', 16000);
+        $khrRate = Currency::getRate('KHR', 4000);
+
         return Inertia::render('Admin/Products/Index', [
             'products' => $products,
-            'games' => $games,
-            'filters' => [
-                'search' => $request->input('search', ''),
+            'games'    => $games,
+            'idrRate'  => $idrRate,
+            'khrRate'  => $khrRate,
+            'filters'  => [
+                'search'  => $request->input('search', ''),
                 'game_id' => $request->input('game_id', ''),
-                'status' => $request->input('status', 'all'),
+                'status'  => $request->input('status', 'all'),
             ],
             'stats' => [
-                'total' => Product::count(),
-                'active' => Product::where('is_active', true)->count(),
+                'total'    => Product::count(),
+                'active'   => Product::where('is_active', true)->count(),
                 'inactive' => Product::where('is_active', false)->count(),
             ],
         ]);
@@ -78,14 +89,16 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'game_id' => ['required', 'exists:games,id'],
-            'name' => ['required', 'string', 'max:255'],
-            'provider_code' => ['required', 'string', 'max:255'],
-            'cost_price' => ['required', 'numeric', 'min:0'],
-            'selling_price' => ['required', 'numeric', 'min:0'],
-            'is_active' => ['boolean'],
+            'game_id'           => ['required', 'exists:games,id'],
+            'name'              => ['required', 'string', 'max:255'],
+            'provider_code'     => ['required', 'string', 'max:255'],
+            'tokovoucher_price' => ['nullable', 'numeric', 'min:0'],
+            'cost_price'        => ['required', 'numeric', 'min:0'],
+            'selling_price'     => ['required', 'numeric', 'min:0'],
+            'is_active'         => ['boolean'],
         ]);
 
+        $validated['provider_code'] = strtoupper(trim($validated['provider_code']));
         Product::create($validated);
 
         return back()->with('success', 'Product package created successfully!');
@@ -103,17 +116,40 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'game_id' => ['required', 'exists:games,id'],
-            'name' => ['required', 'string', 'max:255'],
-            'provider_code' => ['required', 'string', 'max:255'],
-            'cost_price' => ['required', 'numeric', 'min:0'],
-            'selling_price' => ['required', 'numeric', 'min:0'],
-            'is_active' => ['boolean'],
+            'game_id'           => ['required', 'exists:games,id'],
+            'name'              => ['required', 'string', 'max:255'],
+            'provider_code'     => ['required', 'string', 'max:255'],
+            'tokovoucher_price' => ['nullable', 'numeric', 'min:0'],
+            'cost_price'        => ['required', 'numeric', 'min:0'],
+            'selling_price'     => ['required', 'numeric', 'min:0'],
+            'is_active'         => ['boolean'],
         ]);
 
+        $validated['provider_code'] = strtoupper(trim($validated['provider_code']));
         $product->update($validated);
 
         return back()->with('success', 'Product package updated successfully!');
+    }
+
+    /**
+     * Sync cost prices live from Tokovoucher for all products.
+     */
+    public function syncTokovoucher(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isRoot() && ! $user->hasPermissionTo('edit::product')) {
+            abort(403, 'Unauthorized: You do not have permission to sync products.');
+        }
+
+        $idrRate = Currency::getRate('IDR', 16000);
+        $result  = $this->tokovoucherService->syncPrices('ML', $idrRate);
+
+        if (!empty($result['success'])) {
+            return back()->with('success', $result['message']);
+        }
+
+        return back()->with('error', $result['message'] ?? 'Failed to sync with Tokovoucher.');
     }
 
     /**

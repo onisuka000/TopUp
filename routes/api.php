@@ -21,6 +21,8 @@ Route::post('/orders/create', [OrderController::class, 'create']);
 
 // Endpoint ឆែកស្ថានភាពបង់ប្រាក់ (សម្រាប់ Polling ក្នុង Modal)
 Route::get('/orders/{orderNumber}/status', [OrderController::class, 'getStatus']);
+Route::get('/orders/{orderNumber}/check-aba', [OrderController::class, 'checkWithAba']);
 
-// Webhook Endpoint សម្រាប់ទទួល Callback ពីធនាគារ
+// Webhook Endpoints
 Route::post('/webhook/aba', [WebhookController::class, 'handleAbaWebhook']);
+Route::post('/webhook/tokovoucher', [WebhookController::class, 'handleTokovoucherWebhook']);

@@ -184,6 +184,25 @@ const getRoleLabel = (type) => {
                             </svg>
                             <span>Orders</span>
                         </Link>
+
+                        <!-- Exchange Rates -->
+                        <Link
+                            :href="route('admin.exchange-rates.index')"
+                            :class="[
+                                'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition group',
+                                route().current('admin.exchange-rates.*')
+                                    ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/5 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/10'
+                                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
+                            ]"
+                        >
+                            <div class="flex items-center gap-3">
+                                <svg class="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Exchange Rates</span>
+                            </div>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">KHR / USD</span>
+                        </Link>
                     </nav>
                 </div>
 
@@ -285,9 +304,8 @@ const getRoleLabel = (type) => {
 
                 <!-- Right: Status Pill & Store Link -->
                 <div class="flex items-center gap-3">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span class="hidden sm:inline">TopUp Gateway</span> Online
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="hidden sm:inline">{{ currentUser.username || currentUser.login_name }}</span>
                     </span>
 
                     <Link
@@ -338,8 +356,6 @@ const getRoleLabel = (type) => {
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
                         <span class="font-bold text-slate-400">KHMER TOPUP</span>
-                        <span>•</span>
-                        <span>Admin Console (Vue 3 + Laravel)</span>
                     </div>
                     <div>
                         Logged in as <span class="text-slate-300 font-mono font-bold">{{ currentUser.username || currentUser.login_name }}</span> ({{ currentUser.type }})

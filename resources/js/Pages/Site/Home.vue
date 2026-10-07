@@ -8,6 +8,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  khrRate: {
+    type: Number,
+    default: 4000,
+  },
+  currencies: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const page = usePage();
@@ -29,7 +37,8 @@ let checkDebounceTimer = null;
 // Checkout & KHQR Modal State
 const isSubmitting = ref(false);
 const showModal = ref(false);
-const orderStatus = ref('PENDING'); // PENDING, COMPLETED, FAILED
+const orderStatus = ref('PENDING'); // PENDING, PROCESSING, COMPLETED, FAILED
+const orderErrorMessage = ref('');
 const qrInfo = ref(null);
 let pollTimer = null;
 
@@ -145,20 +154,28 @@ const handleBuyNow = async () => {
   }
 };
 
+const isCheckingStatus = ref(false);
+
 const checkPaymentStatus = async () => {
   if (!qrInfo.value?.order_number) return;
   try {
     const res = await axios.get(`/api/orders/${qrInfo.value.order_number}/status`);
-    if (res.data.status === 'COMPLETED') {
-      orderStatus.value = 'COMPLETED';
-      clearInterval(pollTimer);
-    } else if (res.data.status === 'FAILED') {
-      orderStatus.value = 'FAILED';
-      clearInterval(pollTimer);
+    if (res.data?.status) {
+      orderStatus.value = res.data.status;
+    }
+    if (res.data?.status === 'COMPLETED' || res.data?.status === 'FAILED') {
+      if (pollTimer) clearInterval(pollTimer);
     }
   } catch (e) {
     console.error('Check status error:', e);
   }
+};
+
+const forceCheckPayment = async () => {
+  if (!qrInfo.value?.order_number || isCheckingStatus.value) return;
+  isCheckingStatus.value = true;
+  await checkPaymentStatus();
+  isCheckingStatus.value = false;
 };
 
 const closeModal = () => {
@@ -181,13 +198,14 @@ const formatCurrency = (val) => {
 };
 
 const formatKhr = (val) => {
-  const khr = Math.round((Number(val) || 0) * 4100);
+  const rate = props.khrRate || 4000;
+  const khr = Math.round((Number(val) || 0) * rate);
   return new Intl.NumberFormat('en-US').format(khr) + ' ៛';
 };
 </script>
 
 <template>
-  <Head title="KHMER TOPUP // TACTICAL ESPORTS RECHARGE" />
+  <Head title="VB-STORE" />
 
   <div class="min-h-screen bg-black text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-black antialiased relative overflow-x-hidden">
     <!-- Ambient Tactical Lighting & Grid Patterns -->
@@ -208,14 +226,11 @@ const formatKhr = (val) => {
           <div>
             <div class="flex items-center gap-2">
               <span class="text-xl font-black bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent tracking-widest uppercase">
-                KHMER TOPUP
-              </span>
-              <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 tracking-wider">
-                PRO VAULT
+                VB-STORE
               </span>
             </div>
             <p class="text-[10px] uppercase tracking-widest text-zinc-400 font-bold -mt-0.5">
-              MIL-SPEC GAMING RECHARGE
+            GAMING TOP UP
             </p>
           </div>
         </Link>
@@ -223,23 +238,14 @@ const formatKhr = (val) => {
         <!-- Right Side: Telegram, User Auth, Admin Button -->
         <div class="flex items-center gap-3">
           <!-- Telegram Hotline -->
-          <a
+          <!-- <a
             href="https://t.me/your_telegram"
             target="_blank"
             class="hidden md:inline-flex items-center gap-2 text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/80 px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
           >
             <span class="text-cyan-400">💬</span>
             <span>OPERATOR HOTLINE</span>
-          </a>
-
-          <!-- Distinct Admin Staff Console Link (if management staff is visiting storefront) -->
-          <Link
-            v-if="adminStaff"
-            :href="route('admin.dashboard')"
-            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-black transition shadow-sm"
-          >
-            <span>⚙️ ADMIN CONSOLE ({{ adminStaff.username }})</span>
-          </Link>
+          </a> -->
 
           <!-- Authenticated User Profile -->
           <div v-if="currentUser" class="flex items-center gap-2.5 pl-2 border-l border-zinc-800">
@@ -285,13 +291,13 @@ const formatKhr = (val) => {
             </a>
 
             <!-- Telegram / Member Auth Modal Trigger Button -->
-            <button
+            <!-- <button
               @click="showLoginModal = true"
               class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white text-xs font-bold shadow-md shadow-sky-500/20 transition flex items-center gap-1.5 active:scale-95"
             >
               <span>✈️</span>
               <span>TELEGRAM</span>
-            </button>
+            </button> -->
           </div>
         </div>
       </div>
@@ -465,21 +471,13 @@ const formatKhr = (val) => {
               </span>
               <div>
                 <h2 class="font-black text-white text-base tracking-wider uppercase">
-                  OPERATOR IDENTIFICATION // PLAYER ID
+                ENTER USER ID
                 </h2>
                 <p class="text-[11px] text-zinc-400">
                   Search & verify your in-game nickname before ordering.
                 </p>
               </div>
             </div>
-
-            <!-- Verified Status Badge in Header -->
-            <span
-              v-if="verifiedPlayer"
-              class="px-2.5 py-1 rounded-full text-xs font-mono font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 animate-pulse"
-            >
-              <span>✓</span> IGN VERIFIED
-            </span>
           </div>
 
           <!-- Input Fields & Verify Trigger -->
@@ -487,7 +485,7 @@ const formatKhr = (val) => {
             <!-- User ID Input -->
             <div :class="selectedGame.has_zone_id ? 'sm:col-span-5' : 'sm:col-span-9'">
               <label class="block text-[10px] font-mono uppercase text-zinc-400 font-bold mb-1.5">
-                GAME USER ID *
+                GAME ID *
               </label>
               <div class="relative">
                 <input
@@ -545,14 +543,11 @@ const formatKhr = (val) => {
             <div class="flex items-center gap-3.5">
               <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1.5px] shadow-lg shadow-emerald-500/20 shrink-0">
                 <div class="w-full h-full bg-black rounded-[10px] flex items-center justify-center text-xl font-black text-emerald-400">
-                  ⚔️
+                  ✓
                 </div>
               </div>
               <div>
-                <div class="text-[10px] font-mono font-bold text-emerald-400 tracking-wider flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  OPERATOR VERIFIED // READY FOR LOADOUT
-                </div>
+                 
                 <div class="text-base sm:text-lg font-black text-white tracking-wide">
                   {{ verifiedPlayer.player_name }}
                 </div>
@@ -563,15 +558,7 @@ const formatKhr = (val) => {
               </div>
             </div>
 
-            <!-- Level / Rating Badge -->
-            <div class="flex items-center gap-2 self-start sm:self-auto font-mono text-xs">
-              <span class="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-300 font-bold">
-                RANK LVL {{ verifiedPlayer.level }}
-              </span>
-              <span class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
-                CONFIRMED
-              </span>
-            </div>
+       
           </div>
 
           <!-- Error Alert if player check fails -->
@@ -751,12 +738,62 @@ const formatKhr = (val) => {
             Awaiting bank confirmation...
           </div>
 
-          <button
-            @click="closeModal"
-            class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-bold border border-zinc-800"
-          >
-            Cancel Order
-          </button>
+          <div class="flex gap-2 pt-1">
+            <button
+              @click="forceCheckPayment"
+              :disabled="isCheckingStatus"
+              class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black rounded-xl text-xs font-black shadow-lg shadow-amber-500/20 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              <svg v-if="isCheckingStatus" class="animate-spin h-3.5 w-3.5 text-black" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span>{{ isCheckingStatus ? 'CHECKING...' : 'I HAVE PAID // CHECK STATUS' }}</span>
+            </button>
+            <button
+              @click="closeModal"
+              class="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-bold border border-zinc-800 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- PROCESSING / PAID STATE (TOKOVOUCHER TOP-UP IN PROGRESS) -->
+        <div v-else-if="orderStatus === 'PROCESSING' || orderStatus === 'PAID'" class="space-y-5 py-3">
+          <div class="relative w-20 h-20 mx-auto">
+            <div class="absolute inset-0 rounded-full bg-cyan-500/20 blur-xl animate-pulse"></div>
+            <div class="w-20 h-20 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin flex items-center justify-center">
+              <span class="text-2xl animate-pulse">💎</span>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <div class="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-bold">
+              PAYMENT VERIFIED // DELIVERING RECHARGE
+            </div>
+            <h3 class="font-black text-2xl text-white">RECHARGING DIAMONDS</h3>
+            <p class="text-xs text-zinc-300 max-w-xs mx-auto">
+              Delivering to <strong class="text-cyan-400">{{ verifiedPlayer?.player_name || userId }}</strong> via Tokovoucher. Please wait a moment...
+            </p>
+          </div>
+          <div class="p-3 bg-cyan-950/40 border border-cyan-500/20 rounded-xl text-[11px] font-mono text-cyan-300 text-left space-y-1">
+            <div class="flex justify-between">
+              <span class="text-zinc-400">Order:</span>
+              <span class="text-white font-bold">#{{ qrInfo?.order_number }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-zinc-400">Target ID:</span>
+              <span class="text-emerald-400 font-bold">{{ userId }} (Zone {{ zoneId }})</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-zinc-400">Package:</span>
+              <span class="text-amber-400 font-bold">{{ selectedProduct?.name }}</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-center gap-2 text-cyan-400 text-xs font-mono font-bold animate-pulse">
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            Awaiting provider confirmation...
+          </div>
         </div>
 
         <!-- COMPLETED STATE -->
@@ -781,13 +818,13 @@ const formatKhr = (val) => {
           <div class="w-16 h-16 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-full flex items-center justify-center mx-auto text-3xl font-black shadow-lg shadow-rose-500/30">
             ✕
           </div>
-          <h3 class="text-xl font-black text-white">PAYMENT ERROR</h3>
+          <h3 class="text-xl font-black text-white">TRANSACTION ISSUE</h3>
           <p class="text-xs text-zinc-300">
-            Order verification timed out or was declined. Order #{{ qrInfo?.order_number }}.
+            {{ orderErrorMessage || 'Order verification timed out or was declined by provider.' }} (Order #{{ qrInfo?.order_number }}).
           </p>
           <button
             @click="closeModal"
-            class="w-full py-3 bg-zinc-900 text-white font-bold rounded-xl text-xs"
+            class="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs transition"
           >
             Close
           </button>

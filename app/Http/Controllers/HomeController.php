@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Currency;
 use App\Models\Game;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
@@ -15,8 +16,13 @@ class HomeController extends Controller
             $query->where('is_active', true)->orderBy('selling_price', 'asc');
         }])->where('is_active', true)->get();
 
-        return Inertia::render('Home', [
-            'games' => $games,
+        $khrRate = Currency::getRate('KHR', 4000);
+        $currencies = Currency::where('is_active', true)->get();
+
+        return Inertia::render('Site/Home', [
+            'games'      => $games,
+            'khrRate'    => $khrRate,
+            'currencies' => $currencies,
         ]);
     }
 }

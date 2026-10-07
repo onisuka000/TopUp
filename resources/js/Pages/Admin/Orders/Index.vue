@@ -96,6 +96,35 @@ const updateOrderStatus = () => {
     });
 };
 
+const isExecutingProvider = ref(false);
+
+const retryTokovoucherTopUp = () => {
+    if (!activeOrder.value || isExecutingProvider.value) return;
+    if (!confirm(`Are you sure you want to trigger Tokovoucher top-up for Order #${activeOrder.value.order_number}?`)) return;
+
+    isExecutingProvider.value = true;
+    router.post(route('admin.orders.retry-tokovoucher', activeOrder.value.id), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            isExecutingProvider.value = false;
+            isDetailsModalOpen.value = false;
+        },
+    });
+};
+
+const checkTokovoucherStatus = () => {
+    if (!activeOrder.value || isExecutingProvider.value) return;
+
+    isExecutingProvider.value = true;
+    router.post(route('admin.orders.check-tokovoucher', activeOrder.value.id), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            isExecutingProvider.value = false;
+            isDetailsModalOpen.value = false;
+        },
+    });
+};
+
 // Delete Order Modal
 const isDeleteModalOpen = ref(false);
 const orderToDelete = ref(null);
@@ -405,6 +434,38 @@ const executeDelete = () => {
                 <div v-if="activeOrder.provider_ref_id" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
                     <span class="text-[10px] uppercase text-slate-500 block font-bold">Supplier Provider Ref</span>
                     <span class="font-mono text-slate-300">{{ activeOrder.provider_ref_id }}</span>
+                </div>
+
+                <!-- Tokovoucher Actions -->
+                <div v-if="permissions.edit_order" class="p-3.5 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-mono flex items-center gap-1.5">
+                            <span>⚡</span> TOKOVOUCHER GATEWAY
+                        </span>
+                        <span v-if="activeOrder.product?.provider_code" class="text-[10px] font-mono text-slate-400">
+                            SKU: <strong class="text-white">{{ activeOrder.product.provider_code }}</strong>
+                        </span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button
+                            type="button"
+                            @click="retryTokovoucherTopUp"
+                            :disabled="isExecutingProvider"
+                            class="flex-1 py-2 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                            <span>🚀</span>
+                            <span>{{ isExecutingProvider ? 'Processing...' : 'Execute Top-Up' }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="checkTokovoucherStatus"
+                            :disabled="isExecutingProvider"
+                            class="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                            <span>🔄</span>
+                            <span>Check Status</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Status Update Form -->

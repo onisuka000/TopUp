@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useForm, router, usePage } from '@inertiajs/vue3';
+import { useForm, router, usePage, Link } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 
 const props = defineProps({
@@ -19,6 +19,14 @@ const props = defineProps({
     stats: {
         type: Object,
         default: () => ({ total: 0, active: 0, inactive: 0 }),
+    },
+    idrRate: {
+        type: Number,
+        default: 16000,
+    },
+    khrRate: {
+        type: Number,
+        default: 4000,
     },
 });
 
@@ -42,13 +50,22 @@ const applyFilter = () => {
     );
 };
 
-// Currency Formatter
+// Currency Formatters
 const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
         minimumFractionDigits: 2,
     }).format(val || 0);
+};
+
+const formatKhr = (val) => {
+    const khr = Math.round((Number(val) || 0) * (props.khrRate || 4000));
+    return new Intl.NumberFormat('en-US').format(khr) + ' ៛';
+};
+
+const formatIdr = (val) => {
+    return new Intl.NumberFormat('en-US').format(Math.round(Number(val) || 0));
 };
 
 // Modal State
@@ -60,10 +77,28 @@ const form = useForm({
     game_id: '',
     name: '',
     provider_code: '',
+    tokovoucher_price: '',
     cost_price: '',
     selling_price: '',
     is_active: true,
 });
+
+// Auto-conversions between Tokovoucher IDR and USD Cost Price
+const onTokovoucherPriceInput = (e) => {
+    const val = parseFloat(e.target.value);
+    const rate = props.idrRate || 16000;
+    if (!isNaN(val) && val > 0 && rate > 0) {
+        form.cost_price = Number((val / rate).toFixed(2));
+    }
+};
+
+const onCostPriceInput = (e) => {
+    const val = parseFloat(e.target.value);
+    const rate = props.idrRate || 16000;
+    if (!isNaN(val) && val > 0) {
+        form.tokovoucher_price = Math.round(val * rate);
+    }
+};
 
 // Live margin calculation in modal
 const liveProfit = computed(() => {
@@ -85,6 +120,9 @@ const openCreateModal = () => {
     form.reset();
     form.clearErrors();
     form.game_id = props.games.length > 0 ? props.games[0].id : '';
+    form.tokovoucher_price = '';
+    form.cost_price = '';
+    form.selling_price = '';
     form.is_active = true;
     isModalOpen.value = true;
 };
@@ -97,6 +135,7 @@ const openEditModal = (product) => {
     form.game_id = product.game_id;
     form.name = product.name;
     form.provider_code = product.provider_code;
+    form.tokovoucher_price = product.tokovoucher_price ?? (product.cost_price ? Math.round(product.cost_price * (props.idrRate || 16000)) : '');
     form.cost_price = product.cost_price;
     form.selling_price = product.selling_price;
     form.is_active = Boolean(product.is_active);
@@ -117,6 +156,19 @@ const submitForm = () => {
             },
         });
     }
+};
+
+// Live Sync from Tokovoucher catalog
+const isSyncing = ref(false);
+const syncTokovoucherCosts = () => {
+    if (isSyncing.value) return;
+    isSyncing.value = true;
+    router.post(route('admin.products.sync-tokovoucher'), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            isSyncing.value = false;
+        },
+    });
 };
 
 // Toggle status
@@ -155,21 +207,53 @@ const executeDelete = () => {
                         {{ stats.total }} SKUs
                     </span>
                 </h1>
-                <p class="text-slate-400 text-xs mt-1">
-                    Configure pricing, supplier provider codes, and inventory availability per game.
-                </p>
+                <div class="flex flex-wrap items-center gap-3 text-slate-400 text-xs mt-1">
+                    <span>Cost price calculated from Tokovoucher IDR ÷ Exchange Rate.</span>
+                    <span class="hidden sm:inline text-slate-600">•</span>
+                    <Link
+                        :href="route('admin.exchange-rates.index')"
+                        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[11px] font-mono border border-amber-500/20 transition"
+                        title="Configure Currency Exchange Rates"
+                    >
+                        <span>Rates: 1$ = {{ formatIdr(props.idrRate) }} IDR | 1$ = {{ formatIdr(props.khrRate) }} ៛</span>
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </Link>
+                </div>
             </div>
 
-            <button
-                v-if="permissions.create_product"
-                @click="openCreateModal"
-                class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 transition transform active:scale-95"
-            >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Add Product Package</span>
-            </button>
+            <div class="flex items-center gap-2.5">
+                <button
+                    v-if="permissions.edit_product"
+                    @click="syncTokovoucherCosts"
+                    :disabled="isSyncing"
+                    class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold transition disabled:opacity-50 active:scale-95 shadow-sm"
+                    title="Fetch and update cost prices for all SKUs from Tokovoucher live catalog"
+                >
+                    <svg
+                        class="w-4 h-4"
+                        :class="{ 'animate-spin': isSyncing }"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{{ isSyncing ? 'Syncing...' : 'Sync Tokovoucher Costs' }}</span>
+                </button>
+
+                <button
+                    v-if="permissions.create_product"
+                    @click="openCreateModal"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 transition transform active:scale-95"
+                >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Add Product Package</span>
+                </button>
+            </div>
         </div>
 
         <!-- Filter & Search Toolbar -->
@@ -287,20 +371,43 @@ const executeDelete = () => {
                                 </span>
                             </td>
 
-                            <!-- Cost Price -->
-                            <td class="py-3.5 px-4 font-mono text-slate-400">
-                                {{ formatCurrency(product.cost_price) }}
+                            <!-- Cost Price (From Tokovoucher + Exchange Rate) -->
+                            <td class="py-3.5 px-4 font-mono">
+                                <div class="font-bold text-white text-sm">
+                                    {{ formatCurrency(product.cost_price) }}
+                                </div>
+                                <div class="text-[10px] text-amber-400/90 flex items-center gap-1 mt-0.5">
+                                    <span class="text-slate-500 font-sans">Supplier:</span>
+                                    <span v-if="product.tokovoucher_price" class="font-semibold">
+                                        Rp {{ formatIdr(product.tokovoucher_price) }}
+                                    </span>
+                                    <span v-else class="text-slate-400">
+                                        ≈ Rp {{ formatIdr(product.cost_price * props.idrRate) }}
+                                    </span>
+                                    <span class="text-slate-500 text-[9px]">(÷{{ formatIdr(props.idrRate) }})</span>
+                                </div>
+                                <div v-if="product.last_synced_at" class="text-[9px] text-slate-500 mt-0.5">
+                                    Synced: {{ new Date(product.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
+                                </div>
                             </td>
 
-                            <!-- Selling Price -->
-                            <td class="py-3.5 px-4 font-mono font-bold text-emerald-400 text-sm">
-                                {{ formatCurrency(product.selling_price) }}
+                            <!-- Selling Price (USD + Customer KHR Equivalent) -->
+                            <td class="py-3.5 px-4 font-mono">
+                                <div class="font-bold text-emerald-400 text-sm">
+                                    {{ formatCurrency(product.selling_price) }}
+                                </div>
+                                <div class="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                    <span class="text-slate-500 font-sans">Customer:</span>
+                                    <span class="text-emerald-300 font-medium">
+                                        {{ formatKhr(product.selling_price) }}
+                                    </span>
+                                </div>
                             </td>
 
                             <!-- Margin / Profit -->
                             <td class="py-3.5 px-4 font-mono">
                                 <div class="flex items-center gap-1.5">
-                                    <span :class="product.selling_price >= product.cost_price ? 'text-emerald-400' : 'text-rose-400'">
+                                    <span :class="product.selling_price >= product.cost_price ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'">
                                         +{{ formatCurrency(product.selling_price - product.cost_price) }}
                                     </span>
                                     <span
@@ -309,6 +416,9 @@ const executeDelete = () => {
                                     >
                                         {{ Math.round(((product.selling_price - product.cost_price) / product.cost_price) * 100) }}%
                                     </span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">
+                                    +{{ formatKhr(product.selling_price - product.cost_price) }}
                                 </div>
                             </td>
 
@@ -465,42 +575,89 @@ const executeDelete = () => {
                         <p v-if="form.errors.provider_code" class="text-[11px] text-rose-400 mt-1 font-medium">{{ form.errors.provider_code }}</p>
                     </div>
 
+                    <!-- Tokovoucher IDR Supplier Price -->
+                    <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-amber-300">
+                                Tokovoucher Price (IDR Rp)
+                            </label>
+                            <span class="text-[10px] text-slate-400 font-mono">
+                                Rate: 1$ = {{ formatIdr(props.idrRate) }} IDR
+                            </span>
+                        </div>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 text-xs font-mono font-bold">
+                                Rp
+                            </div>
+                            <input
+                                v-model="form.tokovoucher_price"
+                                @input="onTokovoucherPriceInput"
+                                type="number"
+                                step="1"
+                                min="0"
+                                placeholder="e.g. 17280"
+                                class="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl px-3.5 py-2.5 pl-10 text-xs focus:outline-none focus:border-amber-400 transition font-mono"
+                                :class="{ 'border-rose-500': form.errors.tokovoucher_price }"
+                            />
+                        </div>
+                        <p class="text-[10px] text-slate-500">
+                            Entering Tokovoucher IDR calculates Cost Price ($USD) automatically: <span class="font-mono text-slate-400">Rp ÷ {{ formatIdr(props.idrRate) }}</span>
+                        </p>
+                    </div>
+
                     <!-- Prices Grid -->
                     <div class="grid grid-cols-2 gap-4">
                         <!-- Cost Price -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                                Cost Price ($) *
+                                Cost Price ($ USD) *
                             </label>
-                            <input
-                                v-model="form.cost_price"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                required
-                                placeholder="0.00"
-                                class="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-amber-400 transition font-mono"
-                                :class="{ 'border-rose-500': form.errors.cost_price }"
-                            />
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 text-xs font-mono font-bold">
+                                    $
+                                </div>
+                                <input
+                                    v-model="form.cost_price"
+                                    @input="onCostPriceInput"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                    placeholder="0.00"
+                                    class="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3.5 py-2.5 pl-7 text-xs focus:outline-none focus:border-amber-400 transition font-mono"
+                                    :class="{ 'border-rose-500': form.errors.cost_price }"
+                                />
+                            </div>
                             <p v-if="form.errors.cost_price" class="text-[11px] text-rose-400 mt-1 font-medium">{{ form.errors.cost_price }}</p>
+                            <p v-else class="text-[10px] text-slate-500 mt-1 font-mono">
+                                ≈ Rp {{ formatIdr(Number(form.cost_price || 0) * (props.idrRate || 16000)) }}
+                            </p>
                         </div>
 
                         <!-- Selling Price -->
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                                Selling Price ($) *
+                                Selling Price ($ USD) *
                             </label>
-                            <input
-                                v-model="form.selling_price"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                required
-                                placeholder="0.00"
-                                class="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-amber-400 transition font-mono"
-                                :class="{ 'border-rose-500': form.errors.selling_price }"
-                            />
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 text-xs font-mono font-bold">
+                                    $
+                                </div>
+                                <input
+                                    v-model="form.selling_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                    placeholder="0.00"
+                                    class="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3.5 py-2.5 pl-7 text-xs focus:outline-none focus:border-amber-400 transition font-mono"
+                                    :class="{ 'border-rose-500': form.errors.selling_price }"
+                                />
+                            </div>
                             <p v-if="form.errors.selling_price" class="text-[11px] text-rose-400 mt-1 font-medium">{{ form.errors.selling_price }}</p>
+                            <p v-else class="text-[10px] text-emerald-400 mt-1 font-mono">
+                                ≈ {{ formatKhr(form.selling_price || 0) }}
+                            </p>
                         </div>
                     </div>
 
@@ -509,7 +666,7 @@ const executeDelete = () => {
                         <span class="text-slate-400">Profit Margin:</span>
                         <div class="font-mono flex items-center gap-2">
                             <span :class="liveProfit >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'">
-                                {{ formatCurrency(liveProfit) }}
+                                {{ formatCurrency(liveProfit) }} ({{ formatKhr(liveProfit) }})
                             </span>
                             <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                                 {{ liveMarginPercent }}% Markup

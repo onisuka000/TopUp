@@ -4,12 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\TokovoucherService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 
 class WebhookController extends Controller
 {
+    public function __construct(
+        protected TokovoucherService $tokovoucherService
+    ) {}
+
     /**
      * Webhook ទទួលដំណឹងពី ABA PayWay
      * POST /api/webhook/aba
@@ -26,16 +30,16 @@ class WebhookController extends Controller
 
         // ១. ផ្ទៀងផ្ទាត់ Hash Signature ការពារការបន្លំ Request
         $apiKey = config('services.aba.api_key', env('ABA_API_KEY'));
-        
+
         // រូបមន្តគណនា Hash របស់ ABA PayWay: Base64(HMAC-SHA512(tran_id + amount + status, apiKey))
         $expectedHash = base64_encode(
             hash_hmac('sha512', $tranId . $amount . $status, $apiKey, true)
         );
 
-        // if ($hash !== $expectedHash) {
-        //     Log::warning("Invalid ABA Signature for Order: {$tranId}");
-        //     return response()->json(['message' => 'Invalid signature'], 400);
-        // }
+        if ($hash && $hash !== $expectedHash) {
+            Log::warning("Invalid ABA Signature for Order: {$tranId}");
+            return response()->json(['message' => 'Invalid signature'], 400);
+        }
 
         // ២. ស្វែងរក Order ក្នុង Database
         $order = Order::where('order_number', $tranId)->first();
@@ -54,16 +58,10 @@ class WebhookController extends Controller
             // Update ស្ថានភាពទៅជា PAID
             $order->update(['status' => 'PAID']);
 
-            // ៥. ហៅ Provider API ដើម្បីបញ្ចូលពេជ្រភ្លាមៗ
-            $topUpSuccess = $this->triggerProviderTopUp($order);
+            // ៥. ហៅ Tokovoucher API ដើម្បីបញ្ចូលពេជ្រ Mobile Legends ភ្លាមៗ
+            $topUpResult = $this->tokovoucherService->topUp($order);
 
-            if ($topUpSuccess) {
-                $order->update(['status' => 'COMPLETED']);
-                Log::info("Topup Completed successfully for order: {$order->order_number}");
-            } else {
-                $order->update(['status' => 'FAILED']);
-                Log::error("Topup Failed at Provider for order: {$order->order_number}");
-            }
+            Log::info("Tokovoucher TopUp dispatched for order {$order->order_number}:", $topUpResult);
 
             return response()->json(['status' => 'SUCCESS'], 200);
         }
@@ -72,49 +70,62 @@ class WebhookController extends Controller
     }
 
     /**
-     * មុខងារបាញ់បញ្ជាទៅ Game Provider API (ឧ. Smile One)
+     * Webhook ទទួល Callback ពី Tokovoucher
+     * POST /api/webhook/tokovoucher
      */
-    private function triggerProviderTopUp(Order $order): bool
+    public function handleTokovoucherWebhook(Request $request)
     {
-        try {
-            $product = $order->product;
-            $time    = time();
-            $email   = env('SMILE_ONE_EMAIL');
-            $uid     = env('SMILE_ONE_UID');
-            $key     = env('SMILE_ONE_KEY');
+        Log::info('Tokovoucher Webhook Received:', [
+            'headers' => $request->headers->all(),
+            'body'    => $request->all(),
+            'ip'      => $request->ip(),
+        ]);
 
-            // គណនា Signature តាម Provider
-            $sign = md5("email={$email}&time={$time}&uid={$uid}{$key}");
+        $refId     = $request->input('ref_id');
+        $status    = strtolower((string) $request->input('status'));
+        $trxId     = $request->input('trx_id');
+        $sn        = $request->input('sn');
+        $message   = $request->input('message');
+        $signature = $request->header('X-TokoVoucher-Authorization');
 
-            $payload = [
-                'email'      => $email,
-                'uid'        => $uid,
-                'userid'     => $order->game_user_id,
-                'zoneid'     => $order->zone_id,
-                'product_id' => $product->provider_code, // SKU ពេជ្រ
-                'time'       => $time,
-                'sign'       => $sign,
-            ];
-
-            // ហៅ API Provider
-            $response = Http::timeout(15)->post('https://api.smile.one/api/topup', $payload);
-
-            if ($response->successful() && $response->json('status') == 200) {
-                $order->update([
-                    'provider_ref_id' => $response->json('data.order_id') ?? 'PROV_SUCCESS'
-                ]);
-                return true;
-            }
-
-            $order->update([
-                'error_message' => $response->json('message') ?? 'Provider returned error'
-            ]);
-            return false;
-
-        } catch (\Exception $e) {
-            Log::error('Provider Exception: ' . $e->getMessage());
-            $order->update(['error_message' => $e->getMessage()]);
-            return false;
+        if (empty($refId)) {
+            return response()->json(['message' => 'Missing ref_id'], 400);
         }
+
+        // ផ្ទៀងផ្ទាត់ Signature ប្រសិនបើមានផ្ញើមកក្នុង Header
+        if ($signature && !$this->tokovoucherService->validateWebhookSignature($refId, $signature)) {
+            Log::warning("Invalid Tokovoucher Webhook Signature for Order: {$refId}");
+            return response()->json(['message' => 'Invalid Tokovoucher signature'], 401);
+        }
+
+        $order = Order::where('order_number', $refId)->first();
+        if (!$order) {
+            Log::error("Tokovoucher Webhook Order not found: {$refId}");
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        // ប្រសិនបើ Order បានជោគជ័យរួចហើយ មិនបាច់ update ឡើងវិញទេ (Idempotent)
+        if ($order->status === 'COMPLETED') {
+            return response()->json(['status' => 'SUCCESS', 'message' => 'Order already completed'], 200);
+        }
+
+        if ($status === 'sukses' || $status === '1') {
+            $order->update([
+                'status'          => 'COMPLETED',
+                'provider_ref_id' => $trxId ?: ($sn ?: 'TOKOVOUCHER_WEBHOOK'),
+                'error_message'   => null,
+            ]);
+
+            Log::info("Tokovoucher Webhook: Order {$refId} completed successfully.");
+        } elseif ($status === 'gagal' || $status === '0') {
+            $order->update([
+                'status'        => 'FAILED',
+                'error_message' => $message ?: 'Tokovoucher reported transaction failure',
+            ]);
+
+            Log::warning("Tokovoucher Webhook: Order {$refId} failed: {$message}");
+        }
+
+        return response()->json(['status' => 'SUCCESS'], 200);
     }
 }

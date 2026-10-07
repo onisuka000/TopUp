@@ -13,6 +13,13 @@ class PlayerCheckAndGoogleAuthTest extends TestCase
 
     public function test_player_check_returns_verified_ign(): void
     {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://www.smile.one/*' => \Illuminate\Support\Facades\Http::response([
+                'code' => 200,
+                'username' => 'ProPlayer99',
+            ], 200),
+        ]);
+
         $game = Game::create([
             'name' => 'Mobile Legends: Bang Bang',
             'slug' => 'mobile-legends',
@@ -30,6 +37,8 @@ class PlayerCheckAndGoogleAuthTest extends TestCase
         $response->assertJson([
             'status' => 'success',
             'verified' => true,
+            'player_name' => 'ProPlayer99',
+            'username' => 'ProPlayer99',
             'user_id' => '12345678',
             'game_name' => 'Mobile Legends: Bang Bang',
         ]);

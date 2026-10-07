@@ -47,4 +47,10 @@ return [
         'redirect'      => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
     ],
 
+    'tokovoucher' => [
+        'member_code'       => env('TOKOVOUCHER_MEMBER_CODE'),
+        'secret_key'        => env('TOKOVOUCHER_SECRET_KEY'),
+        'url'               => env('TOKOVOUCHER_API_URL', 'https://api.tokovoucher.net/v1'),
+        'signature_default' => env('TOKOVOUCHER_SIGNATURE_DEFAULT'),
+    ],
 ];

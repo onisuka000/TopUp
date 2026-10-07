@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ExchangeRateController;
 use App\Http\Controllers\Admin\GameController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
@@ -34,11 +35,20 @@ Route::middleware(['auth', EnsureAdminStaff::class])->prefix('admin')->name('adm
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
     Route::patch('/products/{product}/toggle', [ProductController::class, 'toggleStatus'])->name('products.toggle');
+    Route::post('/products/sync-tokovoucher', [ProductController::class, 'syncTokovoucher'])->name('products.sync-tokovoucher');
 
     // Orders Management
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update-status');
     Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
+    Route::post('/orders/{order}/retry-tokovoucher', [OrderController::class, 'retryTokovoucher'])->name('orders.retry-tokovoucher');
+    Route::post('/orders/{order}/check-tokovoucher', [OrderController::class, 'checkTokovoucherStatus'])->name('orders.check-tokovoucher');
+
+    // Currencies & Exchange Rates Management
+    Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
+    Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])->name('exchange-rates.store');
+    Route::put('/exchange-rates/{currency}', [ExchangeRateController::class, 'update'])->name('exchange-rates.update');
+    Route::delete('/exchange-rates/{currency}', [ExchangeRateController::class, 'destroy'])->name('exchange-rates.destroy');
 
     // Users Management
     Route::get('/users', [UserController::class, 'index'])->name('users.index');

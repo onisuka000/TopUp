@@ -96,7 +96,7 @@ const getStatusBadgeClass = (status) => {
 <template>
     <AdminLayout title="Dashboard">
         <!-- 1. Hero / Welcome Banner -->
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-900 border border-slate-800 p-6 sm:p-8 shadow-xl">
+        <!-- <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-900 border border-slate-800 p-6 sm:p-8 shadow-xl">
             <div class="absolute -right-10 -bottom-10 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -111,15 +111,13 @@ const getStatusBadgeClass = (status) => {
                             Vue 3 + Laravel Pure Architecture
                         </span>
                     </div>
-                    <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                        Welcome back, <span class="bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">{{ user.username || user.login_name }}</span>!
-                    </h1>
+                    
                     <p class="text-slate-400 text-sm mt-1 max-w-2xl">
                         Monitor revenue, inspect player top-up orders, and manage game packages.
                     </p>
                 </div>
 
-                <!-- Quick Action Buttons -->
+              
                 <div class="flex flex-wrap items-center gap-2.5">
                     <Link
                         v-if="permissions.can_manage_games"
@@ -154,7 +152,7 @@ const getStatusBadgeClass = (status) => {
                     </Link>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- 2. KPI / STATS GRID -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
