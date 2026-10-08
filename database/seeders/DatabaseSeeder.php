@@ -9,9 +9,8 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
+    // TODO php artisan db:seed   
+
     public function run(): void
     {
         $this->call([

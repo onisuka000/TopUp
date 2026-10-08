@@ -57,4 +57,8 @@ RUN composer dump-autoload --optimize
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"]
+RUN composer dump-autoload --optimize
+
+CMD ["sh", "-c", "php artisan config:clear && php artisan migrate --force && php artisan migrate:status && php artisan db:show && php artisan serve --host=0.0.0.0 --port=$PORT"]
+
+# CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"]
