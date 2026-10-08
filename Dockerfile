@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd \
     --with-freetype \
     --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+    && docker-php-ext-install \
     pdo_mysql \
     mbstring \
     exif \
@@ -22,11 +22,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www
 
@@ -41,9 +36,13 @@ RUN composer install \
 
 COPY . .
 
-RUN composer dump-autoload --optimize
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN npm ci && npm run build
+RUN npm ci
+RUN npm run build
 
 RUN mkdir -p \
     storage/framework/cache \
@@ -53,8 +52,8 @@ RUN mkdir -p \
     bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
+RUN composer dump-autoload --optimize
+
 EXPOSE 10000
 
-CMD php artisan serve \
-    --host=0.0.0.0 \
-    --port=10000
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
